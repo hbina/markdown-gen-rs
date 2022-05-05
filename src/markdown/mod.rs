@@ -451,7 +451,7 @@ impl MarkdownWritable for &'_ RichText<'_> {
         Ok(())
     }
 
-    fn count_max_streak(&self, char: u8, _carry: usize) -> (usize, usize) {
+    fn count_max_streak(&self, char: u8, _: usize) -> (usize, usize) {
         let (res, cr) = self.text.count_max_streak(char, 0);
         (res + cr, 0)
     }
@@ -605,7 +605,7 @@ impl MarkdownWritable for &'_ List<'_> {
         Ok(())
     }
 
-    fn count_max_streak(&self, char: u8, _carry: usize) -> (usize, usize) {
+    fn count_max_streak(&self, char: u8, _: usize) -> (usize, usize) {
         let mut count = 0;
         for child in &self.items {
             let (c, _) = child.count_max_streak(char, 0);
@@ -662,6 +662,70 @@ impl<'a> AsMarkdown<'a> for List<'a> {
         Quote::new().append(self)
     }
 }
+//endregion
+
+//region List
+/// Bulleted or numbered list
+pub struct ListOwned {
+    items: Vec<String>,
+    numbered: bool,
+}
+
+impl ListOwned {
+    /// Creates an empty list
+    /// # Arguments
+    /// * `numbered` - `true` for numbered list, `false` for bulleted list
+    pub fn new(numbered: bool) -> Self {
+        Self {
+            items: Vec::default(),
+            numbered,
+        }
+    }
+
+    /// Adds an item to the list
+    pub fn push(&mut self, item: String) {
+        self.items.push(item);
+    }
+}
+
+impl MarkdownWritable for ListOwned {
+    fn write_to(
+        &self,
+        writer: &mut dyn Write,
+        _inner: bool,
+        escape: Option<Escaping>,
+        line_prefix: Option<&[u8]>,
+    ) -> Result<(), Error> {
+        let mut prefix = Vec::new();
+        if line_prefix.is_some() {
+            prefix.extend_from_slice(line_prefix.unwrap());
+        }
+
+        for it in &self.items {
+            if self.numbered {
+                write_line_prefixed(writer, b"\n1. ", Some(&prefix))?;
+            } else {
+                write_line_prefixed(writer, b"\n- ", Some(&prefix))?;
+            }
+
+            it.as_str().write_to(writer, true, escape, Some(&prefix))?;
+        }
+        "\n\n".write_to(writer, true, escape, Some(&prefix))?;
+        Ok(())
+    }
+
+    fn count_max_streak(&self, char: u8, _: usize) -> (usize, usize) {
+        (
+            self.items
+                .iter()
+                .map(|v| v.as_str().count_max_streak(char, 0).0)
+                .max()
+                .unwrap_or(0),
+            0,
+        )
+    }
+}
+
 //endregion
 
 //region Quote
